@@ -1,0 +1,168 @@
+import hashlib
+import hmac
+import secrets
+from datetime import datetime, timezone
+
+
+class User:
+    """Представляет пользователя валютной платформы."""
+
+    MIN_PASSWORD_LENGTH = 4
+    HASH_ITERATIONS = 200_000
+
+    def __init__(
+        self,
+        user_id: int,
+        username: str,
+        hashed_password: str,
+        salt: str,
+        registration_date: datetime | str,
+    ) -> None:
+        """Инициализирует пользователя."""
+        if isinstance(user_id, bool) or not isinstance(user_id, int):
+            raise TypeError("ID пользователя должен быть целым числом.")
+
+        if user_id <= 0:
+            raise ValueError("ID пользователя должен быть положительным.")
+
+        self._user_id = user_id
+        self.username = username
+        self._hashed_password = self._validate_string(hashed_password, "Хеш пароля")
+        self._salt = self._validate_string(salt, "Соль")
+        self._registration_date = self._parse_date(registration_date)
+
+    @classmethod
+    def create(
+        cls,
+        user_id: int,
+        username: str,
+        password: str,
+        registration_date: datetime | None = None,
+    ) -> "User":
+        """Создаёт пользователя с новым хешем пароля."""
+        cls._validate_password(password)
+
+        salt = secrets.token_hex(16)
+        hashed_password = cls._hash_password(password, salt)
+
+        return cls(
+            user_id=user_id,
+            username=username,
+            hashed_password=hashed_password,
+            salt=salt,
+            registration_date=registration_date or datetime.now(timezone.utc),
+        )
+
+    @classmethod
+    def _hash_password(cls, password: str, salt: str) -> str:
+        """Создаёт хеш пароля с использованием PBKDF2-HMAC-SHA256."""
+        return hashlib.pbkdf2_hmac(
+            "sha256",
+            password.encode("utf-8"),
+            salt.encode("utf-8"),
+            cls.HASH_ITERATIONS,
+        ).hex()
+
+    @classmethod
+    def _validate_password(cls, password: str) -> None:
+        """Проверяет минимальную длину пароля."""
+        if not isinstance(password, str):
+            raise TypeError("Пароль должен быть строкой.")
+
+        if len(password) < cls.MIN_PASSWORD_LENGTH:
+            raise ValueError("Пароль должен быть не короче 4 символов.")
+
+    @staticmethod
+    def _validate_string(value: str, field_name: str) -> str:
+        """Проверяет непустую строку."""
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError(f"{field_name} не может быть пустым.")
+
+        return value
+
+    @staticmethod
+    def _parse_date(value: datetime | str) -> datetime:
+        """Преобразует дату регистрации в UTC."""
+        if isinstance(value, str):
+            value = datetime.fromisoformat(value.replace("Z", "+00:00"))
+
+        if not isinstance(value, datetime):
+            raise TypeError("Дата регистрации должна быть datetime.")
+
+        if value.tzinfo is None:
+            return value.replace(tzinfo=timezone.utc)
+
+        return value.astimezone(timezone.utc)
+
+    @property
+    def user_id(self) -> int:
+        """Возвращает идентификатор пользователя."""
+        return self._user_id
+
+    @property
+    def username(self) -> str:
+        """Возвращает имя пользователя."""
+        return self._username
+
+    @username.setter
+    def username(self, value: str) -> None:
+        """Устанавливает имя пользователя."""
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError("Имя пользователя не может быть пустым.")
+
+        self._username = value.strip()
+
+    @property
+    def hashed_password(self) -> str:
+        """Возвращает хеш пароля для сохранения в хранилище."""
+        return self._hashed_password
+
+    @property
+    def salt(self) -> str:
+        """Возвращает соль пользователя для сохранения в хранилище."""
+        return self._salt
+
+    @property
+    def registration_date(self) -> datetime:
+        """Возвращает дату регистрации."""
+        return self._registration_date
+
+    def verify_password(self, password: str) -> bool:
+        """Проверяет соответствие введённого пароля сохранённому хешу."""
+        if not isinstance(password, str):
+            return False
+
+        candidate_hash = self._hash_password(password, self._salt)
+
+        return hmac.compare_digest(
+            self._hashed_password,
+            candidate_hash,
+        )
+
+    def change_password(self, new_password: str) -> None:
+        """Изменяет пароль, генерируя новую соль и хеш."""
+        self._validate_password(new_password)
+
+        new_salt = secrets.token_hex(16)
+        new_hash = self._hash_password(new_password, new_salt)
+
+        self._salt = new_salt
+        self._hashed_password = new_hash
+
+    def get_user_info(self) -> dict:
+        """Возвращает информацию о пользователе без пароля и соли."""
+        return {
+            "user_id": self._user_id,
+            "username": self._username,
+            "registration_date": self._registration_date.isoformat(),
+        }
+
+    def to_dict(self) -> dict:
+        """Преобразует пользователя в словарь для JSON-хранилища."""
+        return {
+            "user_id": self._user_id,
+            "username": self._username,
+            "hashed_password": self._hashed_password,
+            "salt": self._salt,
+            "registration_date": self._registration_date.isoformat(),
+        }
