@@ -1,4 +1,4 @@
-"""Configuration for the Parser Service."""
+"""Конфигурация сервиса Parser Service."""
 
 import os
 from pathlib import Path
@@ -10,14 +10,14 @@ from valutatrade_hub.core.currencies import (
 )
 from valutatrade_hub.infra.settings import SettingsLoader
 
-# Project settings
+# Загрузка настроек проекта
 _settings = SettingsLoader()
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 
 def _resolve_path(path: str | Path) -> Path:
-    """Resolve a data path relative to the project root."""
+    """Определить абсолютный путь относительно корня проекта."""
     directory = Path(path)
 
     if directory.is_absolute():
@@ -26,13 +26,13 @@ def _resolve_path(path: str | Path) -> Path:
     return PROJECT_ROOT / directory
 
 
-# Data storage
+# Настройки хранения данных
 DATA_DIR = _resolve_path(_settings.get("data_dir", "data"))
 RATES_FILE = DATA_DIR / "rates.json"
 EXCHANGE_RATES_FILE = DATA_DIR / "exchange_rates.json"
 
 
-# Currency settings
+# Настройки валют
 BASE_CURRENCY = str(_settings.get("base_currency", "USD")).upper()
 
 SUPPORTED_FIAT_CURRENCIES = tuple(FIAT_CURRENCY_CODES)
@@ -46,7 +46,7 @@ CRYPTO_ID_MAP = {
 }
 
 
-# API settings
+# Настройки внешних API
 COINGECKO_BASE_URL = os.getenv(
     "COINGECKO_BASE_URL",
     "https://api.coingecko.com/api/v3",
@@ -60,21 +60,21 @@ EXCHANGE_RATE_API_BASE_URL = os.getenv(
 EXCHANGE_RATE_API_KEY = os.getenv("EXCHANGE_RATE_API_KEY")
 
 
-# Request and cache settings
+# Настройки запросов и кеширования
 API_TIMEOUT_SECONDS = float(_settings.get("api_timeout", 10))
 
 RATES_TTL_SECONDS = int(_settings.get("rates_ttl_seconds", 3600))
 
 
-# Configuration validation
+# Проверка корректности конфигурации
 if BASE_CURRENCY not in SUPPORTED_CURRENCIES:
-    raise ValueError(f"Unsupported base currency: {BASE_CURRENCY}")
+    raise ValueError(f"Неподдерживаемая базовая валюта: {BASE_CURRENCY}")
 
 if API_TIMEOUT_SECONDS <= 0:
-    raise ValueError("API timeout must be positive.")
+    raise ValueError("Время ожидания API-запроса должно быть положительным.")
 
 if RATES_TTL_SECONDS < 0:
-    raise ValueError("Rates TTL cannot be negative.")
+    raise ValueError("Время актуальности курсов не может быть отрицательным.")
 
 if set(CRYPTO_ID_MAP) != set(SUPPORTED_CRYPTO_CURRENCIES):
-    raise ValueError("CRYPTO_ID_MAP must contain all supported cryptocurrencies.")
+    raise ValueError("CRYPTO_ID_MAP должен содержать все поддерживаемые криптовалюты.")
