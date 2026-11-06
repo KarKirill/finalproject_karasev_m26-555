@@ -31,3 +31,11 @@ class UserNotFoundError(ValutaTradeError):
 
 class InvalidPasswordError(ValutaTradeError):
     """Возникает при неправильном пароле."""
+
+
+class CurrencyNotFoundError(ValutaTradeError):
+    """Возникает при обращении к неизвестной валюте."""
+
+    def __init__(self, code: str) -> None:
+        self.code = code
+        super().__init__(f"Неизвестная валюта '{code}'")
