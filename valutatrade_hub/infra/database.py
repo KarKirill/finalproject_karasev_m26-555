@@ -6,6 +6,8 @@ from pathlib import Path
 from threading import RLock
 from typing import Any, Callable
 
+from valutatrade_hub.infra.settings import SettingsLoader
+
 
 class DatabaseError(Exception):
     """Ошибка при чтении или записи данных."""
@@ -33,12 +35,13 @@ class DatabaseManager:
         project_root = Path(__file__).resolve().parents[2]
 
         if data_dir is None:
-            self._data_dir = project_root / "data"
-        else:
-            directory = Path(data_dir)
-            self._data_dir = (
-                directory if directory.is_absolute() else project_root / directory
-            )
+            data_dir = SettingsLoader().get("data_dir", "data")
+
+        directory = Path(data_dir)
+
+        self._data_dir = (
+            directory if directory.is_absolute() else project_root / directory
+        )
 
         self._paths = {
             "users": self._data_dir / "users.json",
