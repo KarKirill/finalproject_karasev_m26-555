@@ -5,6 +5,7 @@ import secrets
 from datetime import datetime, timezone
 
 from valutatrade_hub.core.exceptions import InsufficientFundsError
+from valutatrade_hub.core.utils import get_usd_rate
 
 
 class User:
@@ -245,4 +246,122 @@ class Wallet:
         return {
             "currency_code": self.currency_code,
             "balance": self.balance,
+        }
+
+
+class Portfolio:
+    """Представляет валютный портфель одного пользователя."""
+
+    def __init__(
+        self,
+        user_id: int,
+        wallets: dict[str, Wallet] | None = None,
+        user: User | None = None,
+    ) -> None:
+        """Инициализирует портфель пользователя."""
+        if isinstance(user_id, bool) or not isinstance(user_id, int):
+            raise TypeError("ID пользователя должен быть целым числом.")
+
+        if user_id <= 0:
+            raise ValueError("ID пользователя должен быть положительным.")
+
+        if user is not None and not isinstance(user, User):
+            raise TypeError("user должен быть объектом User.")
+
+        if user is not None and user.user_id != user_id:
+            raise ValueError("ID пользователя и портфеля не совпадают.")
+
+        self._user_id = user_id
+        self._user = user
+        self._wallets: dict[str, Wallet] = {}
+
+        if wallets is not None:
+            if not isinstance(wallets, dict):
+                raise TypeError("Кошельки должны быть словарём.")
+
+            for currency_code, wallet in wallets.items():
+                code = self._normalize_currency_code(currency_code)
+
+                if not isinstance(wallet, Wallet):
+                    raise TypeError("Каждый кошелёк должен быть объектом Wallet.")
+
+                if wallet.currency_code != code:
+                    raise ValueError("Код валюты кошелька не совпадает с ключом.")
+
+                if code in self._wallets:
+                    raise ValueError(f"Кошелёк {code} уже существует.")
+
+                self._wallets[code] = wallet
+
+    @staticmethod
+    def _normalize_currency_code(currency_code: str) -> str:
+        """Проверяет и нормализует код валюты."""
+        if not isinstance(currency_code, str) or not currency_code.strip():
+            raise ValueError("Код валюты не может быть пустым.")
+
+        code = currency_code.strip().upper()
+
+        if any(char.isspace() for char in code):
+            raise ValueError("Код валюты не должен содержать пробелы.")
+
+        return code
+
+    @property
+    def user(self) -> User | None:
+        """Возвращает пользователя без возможности перезаписи."""
+        return self._user
+
+    @property
+    def wallets(self) -> dict[str, Wallet]:
+        """Возвращает копию словаря кошельков."""
+        return self._wallets.copy()
+
+    def add_currency(self, currency_code: str) -> Wallet:
+        """Добавляет новый кошелёк в портфель."""
+        code = self._normalize_currency_code(currency_code)
+
+        if code in self._wallets:
+            raise ValueError(f"Кошелёк {code} уже существует.")
+
+        wallet = Wallet(code)
+        self._wallets[code] = wallet
+
+        return wallet
+
+    def get_wallet(self, currency_code: str) -> Wallet | None:
+        """Возвращает кошелёк по коду валюты или None."""
+        code = self._normalize_currency_code(currency_code)
+
+        return self._wallets.get(code)
+
+    def get_total_value(
+        self,
+        base_currency: str = "USD",
+        rates: dict | None = None,
+    ) -> float:
+        """Рассчитывает общую стоимость портфеля в базовой валюте."""
+        base_code = self._normalize_currency_code(base_currency)
+
+        base_usd_rate = get_usd_rate(base_code, rates)
+
+        total_usd = 0.0
+
+        for wallet in self._wallets.values():
+            currency_usd_rate = get_usd_rate(
+                wallet.currency_code,
+                rates,
+            )
+
+            total_usd += wallet.balance * currency_usd_rate
+
+        return total_usd / base_usd_rate
+
+    def to_dict(self) -> dict:
+        """Преобразует портфель в словарь для JSON-хранилища."""
+        return {
+            "user_id": self._user_id,
+            "wallets": {
+                code: {"balance": wallet.balance}
+                for code, wallet in self._wallets.items()
+            },
         }
