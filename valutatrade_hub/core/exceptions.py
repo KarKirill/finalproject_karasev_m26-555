@@ -43,3 +43,11 @@ class CurrencyNotFoundError(ValutaTradeError):
 
 class WalletNotFoundError(ValutaTradeError):
     """Возникает при отсутствии кошелька пользователя."""
+
+
+class ApiRequestError(ValutaTradeError):
+    """Возникает при ошибке обращения к внешнему API."""
+
+    def __init__(self, reason: str) -> None:
+        self.reason = reason
+        super().__init__(f"Ошибка при обращении к внешнему API: {reason}")
