@@ -7,6 +7,7 @@ from valutatrade_hub.core.exceptions import (
     InvalidPasswordError,
     UserAlreadyExistsError,
     UserNotFoundError,
+    WalletNotFoundError,
 )
 from valutatrade_hub.core.models import Portfolio, User, Wallet
 from valutatrade_hub.infra.database import DatabaseError, DatabaseManager
@@ -275,6 +276,61 @@ def buy(user_id: int, currency_code: str, amount: float) -> dict:
 
                 wallet = portfolio.wallets[currency.code]
                 wallet.deposit(amount)
+
+                portfolios[index] = portfolio.to_dict()
+
+                return portfolios
+
+        raise DatabaseError(f"Портфель пользователя {user_id} не найден.")
+
+    updated_portfolios = database.update_json(
+        "portfolios",
+        update_portfolio,
+        default=[],
+    )
+
+    updated_record = next(
+        record for record in updated_portfolios if record["user_id"] == user_id
+    )
+
+    portfolio = _portfolio_from_record(updated_record, user)
+    wallet = portfolio.wallets[currency.code]
+
+    return {
+        "user_id": user_id,
+        "currency_code": currency.code,
+        "amount": float(amount),
+        "balance": wallet.balance,
+    }
+
+
+def sell(user_id: int, currency_code: str, amount: float) -> dict:
+    """Продаёт валюту, уменьшая баланс соответствующего кошелька."""
+    user = get_user_by_id(user_id)
+
+    if user is None:
+        raise UserNotFoundError(f"Пользователь с ID {user_id} не найден.")
+
+    currency = get_currency(currency_code)
+    _validate_amount(amount)
+
+    database = DatabaseManager()
+
+    def update_portfolio(portfolios: list) -> list:
+        if not isinstance(portfolios, list):
+            raise DatabaseError("Некорректный формат portfolios.json.")
+
+        for index, record in enumerate(portfolios):
+            if isinstance(record, dict) and record.get("user_id") == user_id:
+                portfolio = _portfolio_from_record(record, user)
+
+                wallet = portfolio.wallets.get(currency.code)
+
+                if wallet is None:
+                    raise WalletNotFoundError(f"Кошелёк {currency.code} не найден.")
+
+                # withdraw самостоятельно проверяет остаток средств.
+                wallet.withdraw(amount)
 
                 portfolios[index] = portfolio.to_dict()
 

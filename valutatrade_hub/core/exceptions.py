@@ -39,3 +39,7 @@ class CurrencyNotFoundError(ValutaTradeError):
     def __init__(self, code: str) -> None:
         self.code = code
         super().__init__(f"Неизвестная валюта '{code}'")
+
+
+class WalletNotFoundError(ValutaTradeError):
+    """Возникает при отсутствии кошелька пользователя."""
