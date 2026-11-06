@@ -1,5 +1,9 @@
-class InsufficientFundsError(Exception):
-    """Возникает при попытке снять больше средств, чем доступно."""
+class ValutaTradeError(Exception):
+    """Базовое исключение приложения ValutaTrade Hub."""
+
+
+class InsufficientFundsError(ValutaTradeError):
+    """Возникает при недостатке средств."""
 
     def __init__(
         self,
@@ -15,3 +19,15 @@ class InsufficientFundsError(Exception):
             f"Недостаточно средств: доступно {available:.4f} {code}, "
             f"требуется {required:.4f} {code}"
         )
+
+
+class UserAlreadyExistsError(ValutaTradeError):
+    """Возникает при регистрации существующего пользователя."""
+
+
+class UserNotFoundError(ValutaTradeError):
+    """Возникает при поиске несуществующего пользователя."""
+
+
+class InvalidPasswordError(ValutaTradeError):
+    """Возникает при неправильном пароле."""
