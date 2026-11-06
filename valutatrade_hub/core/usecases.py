@@ -1,5 +1,8 @@
 """Бизнес-логика валютного кошелька."""
 
+import math
+
+from valutatrade_hub.core.currencies import get_currency
 from valutatrade_hub.core.exceptions import (
     InvalidPasswordError,
     UserAlreadyExistsError,
@@ -234,3 +237,67 @@ def show_portfolio(
     )
 
     return portfolio, total_value
+
+
+def _validate_amount(amount: float) -> None:
+    """Проверяет корректность денежной суммы."""
+    if (
+        isinstance(amount, bool)
+        or not isinstance(amount, (int, float))
+        or not math.isfinite(amount)
+        or amount <= 0
+    ):
+        raise ValueError("Сумма должна быть положительным числом.")
+
+
+def buy(user_id: int, currency_code: str, amount: float) -> dict:
+    """Покупает валюту, увеличивая баланс соответствующего кошелька."""
+    user = get_user_by_id(user_id)
+
+    if user is None:
+        raise UserNotFoundError(f"Пользователь с ID {user_id} не найден.")
+
+    currency = get_currency(currency_code)
+    _validate_amount(amount)
+
+    database = DatabaseManager()
+
+    def update_portfolio(portfolios: list) -> list:
+        if not isinstance(portfolios, list):
+            raise DatabaseError("Некорректный формат portfolios.json.")
+
+        for index, record in enumerate(portfolios):
+            if isinstance(record, dict) and record.get("user_id") == user_id:
+                portfolio = _portfolio_from_record(record, user)
+
+                if currency.code not in portfolio.wallets:
+                    portfolio.add_currency(currency.code)
+
+                wallet = portfolio.wallets[currency.code]
+                wallet.deposit(amount)
+
+                portfolios[index] = portfolio.to_dict()
+
+                return portfolios
+
+        raise DatabaseError(f"Портфель пользователя {user_id} не найден.")
+
+    updated_portfolios = database.update_json(
+        "portfolios",
+        update_portfolio,
+        default=[],
+    )
+
+    updated_record = next(
+        record for record in updated_portfolios if record["user_id"] == user_id
+    )
+
+    portfolio = _portfolio_from_record(updated_record, user)
+    wallet = portfolio.wallets[currency.code]
+
+    return {
+        "user_id": user_id,
+        "currency_code": currency.code,
+        "amount": float(amount),
+        "balance": wallet.balance,
+    }

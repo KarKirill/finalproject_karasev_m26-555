@@ -222,7 +222,7 @@ class Wallet:
     def deposit(self, amount: float) -> None:
         """Пополняет баланс кошелька."""
         amount = self._validate_amount(amount)
-        self.balance += amount
+        self.balance = round(self.balance + amount, 8)
 
     def withdraw(self, amount: float) -> None:
         """Снимает средства при достаточном балансе."""
@@ -235,7 +235,7 @@ class Wallet:
                 code=self.currency_code,
             )
 
-        self.balance -= amount
+        self.balance = round(self.balance - amount, 8)
 
     def get_balance_info(self) -> str:
         """Возвращает информацию о текущем балансе."""
