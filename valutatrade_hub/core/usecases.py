@@ -5,7 +5,7 @@ from valutatrade_hub.core.exceptions import (
     UserAlreadyExistsError,
     UserNotFoundError,
 )
-from valutatrade_hub.core.models import User
+from valutatrade_hub.core.models import Portfolio, User, Wallet
 from valutatrade_hub.infra.database import DatabaseError, DatabaseManager
 
 
@@ -154,3 +154,83 @@ def login(username: str, password: str) -> User:
         raise InvalidPasswordError("Неверный пароль.")
 
     return user
+
+
+def _portfolio_from_record(record: dict, user: User) -> Portfolio:
+    """Восстанавливает объект Portfolio из JSON-записи."""
+    if not isinstance(record, dict):
+        raise DatabaseError("Некорректная запись портфеля.")
+
+    if record.get("user_id") != user.user_id:
+        raise DatabaseError("ID пользователя в портфеле не совпадает.")
+
+    wallets_data = record.get("wallets", {})
+
+    if not isinstance(wallets_data, dict):
+        raise DatabaseError("Некорректный формат кошельков.")
+
+    try:
+        wallets = {
+            code: Wallet(
+                currency_code=code,
+                balance=wallet_data["balance"],
+            )
+            for code, wallet_data in wallets_data.items()
+            if isinstance(wallet_data, dict)
+        }
+
+        if len(wallets) != len(wallets_data):
+            raise ValueError("Некорректная запись кошелька.")
+
+        return Portfolio(
+            user_id=user.user_id,
+            wallets=wallets,
+            user=user,
+        )
+
+    except (KeyError, TypeError, ValueError) as error:
+        raise DatabaseError("Не удалось восстановить портфель пользователя.") from error
+
+
+def show_portfolio(
+    user_id: int,
+    base_currency: str = "USD",
+) -> tuple[Portfolio, float]:
+    """Возвращает портфель пользователя и его общую стоимость."""
+    database = DatabaseManager()
+
+    user = get_user_by_id(user_id)
+
+    if user is None:
+        raise UserNotFoundError(f"Пользователь с ID {user_id} не найден.")
+
+    portfolios = database.load_portfolios()
+
+    if not isinstance(portfolios, list):
+        raise DatabaseError("Некорректный формат portfolios.json.")
+
+    portfolio_record = next(
+        (
+            record
+            for record in portfolios
+            if isinstance(record, dict) and record.get("user_id") == user_id
+        ),
+        None,
+    )
+
+    if portfolio_record is None:
+        raise DatabaseError(f"Портфель пользователя {user_id} не найден.")
+
+    portfolio = _portfolio_from_record(portfolio_record, user)
+
+    rates = database.load_rates()
+
+    if not isinstance(rates, dict):
+        raise DatabaseError("Некорректный формат rates.json.")
+
+    total_value = portfolio.get_total_value(
+        base_currency=base_currency,
+        rates=rates,
+    )
+
+    return portfolio, total_value
