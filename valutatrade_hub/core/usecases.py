@@ -205,7 +205,8 @@ def show_portfolio(
     user_id: int,
     base_currency: str = "USD",
 ) -> tuple[Portfolio, float]:
-    """Возвращает портфель пользователя и его общую стоимость."""
+    """Возвращает портфель и его стоимость по актуальным курсам."""
+    base_code = get_currency(base_currency).code
     database = DatabaseManager()
 
     user = get_user_by_id(user_id)
@@ -231,14 +232,30 @@ def show_portfolio(
         raise DatabaseError(f"Портфель пользователя {user_id} не найден.")
 
     portfolio = _portfolio_from_record(portfolio_record, user)
+    wallets = portfolio.wallets
 
+    # Пустой портфель не требует обращения к API.
+    if not wallets or all(wallet.balance == 0 for wallet in wallets.values()):
+        return portfolio, 0.0
+
+    # Проверяем актуальность курсов валют, имеющихся в портфеле,
+    # а также валюты, в которой требуется показать стоимость.
+    required_codes = {code for code in wallets if code != "USD"}
+
+    if base_code != "USD":
+        required_codes.add(base_code)
+
+    for code in sorted(required_codes):
+        get_rate(code, "USD")
+
+    # После возможного обновления читаем сохранённые курсы заново.
     rates = database.load_rates()
 
-    if not isinstance(rates, dict):
+    if not isinstance(rates, dict) or not isinstance(rates.get("pairs"), dict):
         raise DatabaseError("Некорректный формат rates.json.")
 
     total_value = portfolio.get_total_value(
-        base_currency=base_currency,
+        base_currency=base_code,
         rates=rates,
     )
 
