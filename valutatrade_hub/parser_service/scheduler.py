@@ -1,4 +1,3 @@
-
 """Необязательный планировщик периодического обновления курсов."""
 
 import logging
@@ -7,7 +6,6 @@ from typing import Any
 
 from valutatrade_hub.core.exceptions import ApiRequestError
 from valutatrade_hub.parser_service.updater import RatesUpdater
-
 
 logger = logging.getLogger(__name__)
 

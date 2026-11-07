@@ -1,16 +1,21 @@
 """Бизнес-логика валютного кошелька."""
 
 import math
+from datetime import datetime, timezone
 
 from valutatrade_hub.core.currencies import get_currency
 from valutatrade_hub.core.exceptions import (
+    ApiRequestError,
     InvalidPasswordError,
     UserAlreadyExistsError,
     UserNotFoundError,
     WalletNotFoundError,
 )
 from valutatrade_hub.core.models import Portfolio, User, Wallet
+from valutatrade_hub.core.utils import get_usd_rate
 from valutatrade_hub.infra.database import DatabaseError, DatabaseManager
+from valutatrade_hub.parser_service.config import RATES_TTL_SECONDS
+from valutatrade_hub.parser_service.updater import RatesUpdater
 
 
 def _normalize_username(username: str) -> str:
@@ -357,3 +362,85 @@ def sell(user_id: int, currency_code: str, amount: float) -> dict:
         "amount": float(amount),
         "balance": wallet.balance,
     }
+
+
+def _is_fresh_usd_rate(
+    currency_code: str,
+    snapshot: dict,
+    current_time: datetime,
+) -> bool:
+    """Проверяет актуальность курса валюты относительно USD."""
+    if currency_code == "USD":
+        return True
+
+    pairs = snapshot.get("pairs")
+
+    if not isinstance(pairs, dict):
+        return False
+
+    rate_data = pairs.get(f"{currency_code}_USD")
+
+    if not isinstance(rate_data, dict):
+        return False
+
+    # Проверяем, что сохранённый курс корректен.
+    try:
+        get_usd_rate(currency_code, snapshot)
+    except ValueError:
+        return False
+
+    updated_at = rate_data.get("updated_at")
+
+    if not isinstance(updated_at, str):
+        return False
+
+    try:
+        timestamp = datetime.fromisoformat(updated_at.replace("Z", "+00:00"))
+    except ValueError:
+        return False
+
+    if timestamp.tzinfo is None:
+        return False
+
+    age_seconds = (current_time - timestamp.astimezone(timezone.utc)).total_seconds()
+
+    return 0 <= age_seconds <= RATES_TTL_SECONDS
+
+
+def get_rate(from_code: str, to_code: str) -> float:
+    """Возвращает актуальный курс одной валюты относительно другой."""
+    source_code = get_currency(from_code).code
+    target_code = get_currency(to_code).code
+
+    # Для одинаковых валют курс всегда равен единице.
+    if source_code == target_code:
+        return 1.0
+
+    updater = RatesUpdater()
+    snapshot = updater.storage.load_rates()
+    current_time = datetime.now(timezone.utc)
+
+    required_codes = (source_code, target_code)
+
+    # Обновляем курсы только при отсутствии актуальных данных.
+    if not all(
+        _is_fresh_usd_rate(code, snapshot, current_time) for code in required_codes
+    ):
+        updater.update_rates()
+
+        snapshot = updater.storage.load_rates()
+        current_time = datetime.now(timezone.utc)
+
+        # После обновления проверяем именно нужные валюты.
+        if not all(
+            _is_fresh_usd_rate(code, snapshot, current_time) for code in required_codes
+        ):
+            raise ApiRequestError(
+                "Не удалось получить актуальный курс "
+                f"для валютной пары {source_code}/{target_code}."
+            )
+
+    source_usd_rate = get_usd_rate(source_code, snapshot)
+    target_usd_rate = get_usd_rate(target_code, snapshot)
+
+    return source_usd_rate / target_usd_rate
