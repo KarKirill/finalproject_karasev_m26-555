@@ -22,6 +22,7 @@ class SettingsLoader:
         "actions_log_file": "logs/actions.log",
         "parser_log_file": "logs/parser.log",
         "api_timeout": 10,
+        "scheduler_interval_seconds": 60,
     }
 
     def __new__(cls) -> "SettingsLoader":
