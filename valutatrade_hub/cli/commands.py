@@ -15,6 +15,49 @@ class CommandParser(argparse.ArgumentParser):
             "Введите help для просмотра доступных команд."
         )
 
+    def parse_args(
+        self,
+        args: list[str] | None = None,
+        namespace: argparse.Namespace | None = None,
+    ) -> argparse.Namespace:
+        """Разобрать и объединить позиционные и именованные аргументы."""
+        parsed = super().parse_args(args, namespace)
+
+        required_fields = {
+            "register": (("username", "--username"),),
+            "login": (("username", "--username"),),
+            "buy": (
+                ("currency", "--currency"),
+                ("amount", "--amount"),
+            ),
+            "sell": (
+                ("currency", "--currency"),
+                ("amount", "--amount"),
+            ),
+            "get-rate": (
+                ("from_code", "--from"),
+                ("to_code", "--to"),
+            ),
+        }
+
+        for field_name, option_name in required_fields.get(parsed.command, ()):
+            positional_value = getattr(parsed, field_name)
+            option_field = f"option_{field_name}"
+            option_value = getattr(parsed, option_field)
+
+            if positional_value is not None and option_value is not None:
+                self.error(f"Параметр {option_name} указан дважды.")
+
+            value = option_value if option_value is not None else positional_value
+
+            if value is None:
+                self.error(f"Не указан обязательный параметр {option_name}.")
+
+            setattr(parsed, field_name, value)
+            delattr(parsed, option_field)
+
+        return parsed
+
 
 def _currency_code(value: str) -> str:
     """Проверить и нормализовать код валюты."""
@@ -39,6 +82,21 @@ def _positive_integer(value: str) -> int:
     return number
 
 
+def _add_dual_argument(
+    command_parser: CommandParser,
+    name: str,
+    option: str,
+    **kwargs: object,
+) -> None:
+    """Разрешить позиционную и именованную формы одного аргумента."""
+    command_parser.add_argument(name, nargs="?", **kwargs)
+    command_parser.add_argument(
+        option,
+        dest=f"option_{name}",
+        **kwargs,
+    )
+
+
 def build_parser() -> CommandParser:
     """Создать парсер команд приложения."""
     parser = CommandParser(
@@ -52,23 +110,27 @@ def build_parser() -> CommandParser:
     )
 
     # Регистрация и авторизация.
-    register_parser = subparsers.add_parser(
-        "register",
-        help="Зарегистрировать нового пользователя.",
-    )
-    register_parser.add_argument(
-        "username",
-        help="Имя пользователя.",
-    )
+    for command_name, description in (
+        ("register", "Зарегистрировать нового пользователя."),
+        ("login", "Войти в учётную запись."),
+    ):
+        auth_parser = subparsers.add_parser(
+            command_name,
+            help=description,
+        )
 
-    login_parser = subparsers.add_parser(
-        "login",
-        help="Войти в учётную запись.",
-    )
-    login_parser.add_argument(
-        "username",
-        help="Имя пользователя.",
-    )
+        _add_dual_argument(
+            auth_parser,
+            "username",
+            "--username",
+            help="Имя пользователя.",
+        )
+
+        auth_parser.add_argument(
+            "--password",
+            default=None,
+            help="Пароль (если не указан, вводится интерактивно).",
+        )
 
     # Просмотр портфеля.
     portfolio_parser = subparsers.add_parser(
@@ -91,13 +153,19 @@ def build_parser() -> CommandParser:
             command_name,
             help=description,
         )
-        trade_parser.add_argument(
+
+        _add_dual_argument(
+            trade_parser,
             "currency",
+            "--currency",
             type=_currency_code,
             help="Код валюты.",
         )
-        trade_parser.add_argument(
+
+        _add_dual_argument(
+            trade_parser,
             "amount",
+            "--amount",
             type=float,
             help="Количество валюты.",
         )
@@ -107,13 +175,19 @@ def build_parser() -> CommandParser:
         "get-rate",
         help="Получить актуальный валютный курс.",
     )
-    rate_parser.add_argument(
+
+    _add_dual_argument(
+        rate_parser,
         "from_code",
+        "--from",
         type=_currency_code,
         help="Исходная валюта.",
     )
-    rate_parser.add_argument(
+
+    _add_dual_argument(
+        rate_parser,
         "to_code",
+        "--to",
         type=_currency_code,
         help="Целевая валюта.",
     )

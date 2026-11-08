@@ -30,13 +30,14 @@ from valutatrade_hub.parser_service.updater import RatesUpdater
 logger = logging.getLogger(__name__)
 
 
-def _handle_register(username: str) -> None:
-    """Зарегистрировать пользователя с подтверждением пароля."""
-    password = getpass("Введите пароль: ")
-    confirmation = getpass("Повторите пароль: ")
+def _handle_register(username: str, password: str | None = None) -> None:
+    """Зарегистрировать пользователя с интерактивным или заданным паролем."""
+    if password is None:
+        password = getpass("Введите пароль: ")
+        confirmation = getpass("Повторите пароль: ")
 
-    if password != confirmation:
-        raise ValueError("Введённые пароли не совпадают.")
+        if password != confirmation:
+            raise ValueError("Введённые пароли не совпадают.")
 
     user = register(username, password)
 
@@ -49,9 +50,11 @@ def _handle_register(username: str) -> None:
     print(f"Пользователь '{user.username}' успешно зарегистрирован.")
 
 
-def _handle_login(username: str) -> User:
+def _handle_login(username: str, password: str | None = None) -> User:
     """Авторизовать пользователя и вернуть его для текущей сессии."""
-    password = getpass("Введите пароль: ")
+    if password is None:
+        password = getpass("Введите пароль: ")
+
     user = login(username, password)
 
     logger.info(
@@ -276,10 +279,10 @@ def run() -> None:
 
         try:
             if args.command == "register":
-                _handle_register(args.username)
+                _handle_register(args.username, args.password)
 
             elif args.command == "login":
-                current_user = _handle_login(args.username)
+                current_user = _handle_login(args.username, args.password)
 
             elif (
                 args.command in ("show-portfolio", "buy", "sell")
