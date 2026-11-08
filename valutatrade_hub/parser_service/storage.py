@@ -102,6 +102,7 @@ class RatesStorage:
         # Обновляем актуальный снимок, сохраняя старые курсы,
         # которые не были получены от источников в этом обновлении.
         def update_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:
+            """Сохранять только более свежие курсы валют."""
             if not isinstance(snapshot, dict):
                 raise ValueError("Некорректная структура актуального кеша.")
 
@@ -113,15 +114,38 @@ class RatesStorage:
             updated_pairs = dict(pairs)
 
             for pair, rate in validated_rates.items():
+                existing_record = updated_pairs.get(pair)
+
+                if isinstance(existing_record, dict):
+                    previous_timestamp = existing_record.get("updated_at")
+
+                    if isinstance(previous_timestamp, str):
+                        normalized_timestamp = self._get_timestamp(previous_timestamp)
+
+                        # Время нормализовано к UTC с точностью до микросекунд.
+                        if timestamp <= normalized_timestamp:
+                            continue
+
                 updated_pairs[pair] = {
                     "rate": rate,
                     "updated_at": timestamp,
                     "source": source,
                 }
 
+            # Общее время последнего обновления не должно уменьшаться.
+            previous_refresh = snapshot.get("last_refresh")
+
+            if isinstance(previous_refresh, str):
+                last_refresh = max(
+                    timestamp,
+                    self._get_timestamp(previous_refresh),
+                )
+            else:
+                last_refresh = timestamp
+
             return {
                 "pairs": updated_pairs,
-                "last_refresh": timestamp,
+                "last_refresh": last_refresh,
             }
 
         snapshot = self.database.update_json(
@@ -134,6 +158,7 @@ class RatesStorage:
         def update_history(
             history: list[dict[str, Any]],
         ) -> list[dict[str, Any]]:
+            """Добавить измерения курсов в историю без повторения ID."""
             if not isinstance(history, list):
                 raise ValueError("Некорректная структура истории курсов.")
 
@@ -143,12 +168,9 @@ class RatesStorage:
                 record.get("id") for record in history if isinstance(record, dict)
             }
 
-            history_timestamp = (
-                timestamp.replace("-", "").replace(":", "").replace(".", "")
-            )
-
             for pair, rate in validated_rates.items():
-                record_id = f"{pair}_{history_timestamp}"
+                from_currency, to_currency = pair.split("_")
+                record_id = f"{pair}_{timestamp}"
 
                 if record_id in existing_ids:
                     continue
@@ -156,9 +178,10 @@ class RatesStorage:
                 updated_history.append(
                     {
                         "id": record_id,
-                        "pair": pair,
+                        "from_currency": from_currency,
+                        "to_currency": to_currency,
                         "rate": rate,
-                        "updated_at": timestamp,
+                        "timestamp": timestamp,
                         "source": source,
                     }
                 )
