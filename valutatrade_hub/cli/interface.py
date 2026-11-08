@@ -114,6 +114,14 @@ def _handle_sell(user_id: int, currency_code: str, amount: float) -> None:
     print(f"Текущий баланс: {result['balance']:.8f} {result['currency_code']}")
 
 
+def _handle_get_rate(from_code: str, to_code: str) -> None:
+    """Показать актуальный курс валютной пары."""
+    rate = get_rate(from_code, to_code)
+
+    print(f"\nАктуальный курс {from_code}/{to_code}:")
+    print(f"1 {from_code} = {rate:.8f} {to_code}")
+
+
 def run() -> None:
     """Запустить интерактивную консоль приложения."""
     parser = build_parser()
@@ -184,6 +192,12 @@ def run() -> None:
                     current_user.user_id,
                     args.currency,
                     args.amount,
+                )
+
+            elif args.command == "get-rate":
+                _handle_get_rate(
+                    args.from_code,
+                    args.to_code,
                 )
 
             else:
