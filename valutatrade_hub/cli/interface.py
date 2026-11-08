@@ -1,5 +1,6 @@
 """Интерактивный консольный интерфейс ValutaTrade Hub."""
 
+import logging
 import shlex
 from getpass import getpass
 
@@ -17,6 +18,7 @@ from valutatrade_hub.core.usecases import (
     show_portfolio,
 )
 from valutatrade_hub.infra.database import DatabaseError
+from valutatrade_hub.infra.logging_config import parser_console_logging
 from valutatrade_hub.parser_service.config import (
     BASE_CURRENCY,
     SUPPORTED_CRYPTO_CURRENCIES,
@@ -24,6 +26,8 @@ from valutatrade_hub.parser_service.config import (
 )
 from valutatrade_hub.parser_service.storage import RatesStorage
 from valutatrade_hub.parser_service.updater import RatesUpdater
+
+logger = logging.getLogger(__name__)
 
 
 def _handle_register(username: str) -> None:
@@ -36,6 +40,12 @@ def _handle_register(username: str) -> None:
 
     user = register(username, password)
 
+    logger.info(
+        "Зарегистрирован пользователь: ID=%s, имя=%s.",
+        user.user_id,
+        user.username,
+    )
+
     print(f"Пользователь '{user.username}' успешно зарегистрирован.")
 
 
@@ -43,6 +53,12 @@ def _handle_login(username: str) -> User:
     """Авторизовать пользователя и вернуть его для текущей сессии."""
     password = getpass("Введите пароль: ")
     user = login(username, password)
+
+    logger.info(
+        "Успешная авторизация: ID=%s, имя=%s.",
+        user.user_id,
+        user.username,
+    )
 
     print(f"Вход выполнен. Пользователь: {user.username}.")
 
@@ -132,7 +148,10 @@ def _handle_get_rate(from_code: str, to_code: str) -> None:
 def _handle_update_rates() -> None:
     """Принудительно обновить курсы валют и показать результат."""
     updater = RatesUpdater()
-    result = updater.run_update()
+
+    # Временно показываем сообщения Parser Service в консоли.
+    with parser_console_logging():
+        result = updater.run_update()
 
     print("\nОбновление курсов завершено.")
     print(f"Обновлено валютных пар: {result['updated_count']}")
@@ -304,6 +323,11 @@ def run() -> None:
                 print(f"Команда '{args.command}' будет подключена на следующем этапе.")
 
         except (ValutaTradeError, DatabaseError, ValueError) as error:
+            logger.warning(
+                "Ошибка выполнения команды %s: %s",
+                args.command,
+                error,
+            )
             print(f"Ошибка: {error}")
 
         except (EOFError, KeyboardInterrupt):

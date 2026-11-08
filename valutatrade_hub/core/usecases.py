@@ -13,6 +13,7 @@ from valutatrade_hub.core.exceptions import (
 )
 from valutatrade_hub.core.models import Portfolio, User, Wallet
 from valutatrade_hub.core.utils import get_usd_rate
+from valutatrade_hub.decorators import log_action
 from valutatrade_hub.infra.database import DatabaseError, DatabaseManager
 from valutatrade_hub.parser_service.config import RATES_TTL_SECONDS
 from valutatrade_hub.parser_service.updater import RatesUpdater
@@ -273,6 +274,7 @@ def _validate_amount(amount: float) -> None:
         raise ValueError("Сумма должна быть положительным числом.")
 
 
+@log_action(action="BUY", verbose=True)
 def buy(user_id: int, currency_code: str, amount: float) -> dict:
     """Покупает валюту, увеличивая баланс соответствующего кошелька."""
     user = get_user_by_id(user_id)
@@ -332,6 +334,7 @@ def buy(user_id: int, currency_code: str, amount: float) -> dict:
     }
 
 
+@log_action(action="SELL", verbose=True)
 def sell(user_id: int, currency_code: str, amount: float) -> dict:
     """Продаёт валюту, уменьшая баланс соответствующего кошелька."""
     user = get_user_by_id(user_id)
