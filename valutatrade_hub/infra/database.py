@@ -70,7 +70,7 @@ class DatabaseManager:
         try:
             with path.open("r", encoding="utf-8") as file:
                 return json.load(file)
-        except (OSError, json.JSONDecodeError) as error:
+        except (OSError, UnicodeError, json.JSONDecodeError) as error:
             raise DatabaseError(f"Не удалось прочитать {path.name}: {error}") from error
 
     def load_json(self, name: str, default: Any = None) -> Any:
