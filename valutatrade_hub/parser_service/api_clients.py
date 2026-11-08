@@ -31,8 +31,15 @@ class BaseApiClient(ABC):
         timeout: float = API_TIMEOUT_SECONDS,
         session: requests.Session | None = None,
     ) -> None:
-        if timeout <= 0:
-            raise ValueError("Время ожидания запроса должно быть положительным.")
+        if (
+            isinstance(timeout, bool)
+            or not isinstance(timeout, (int, float))
+            or not math.isfinite(timeout)
+            or timeout <= 0
+        ):
+            raise ValueError(
+                "Время ожидания запроса должно быть положительным конечным числом."
+            )
 
         self.timeout = timeout
         self.session = session if session is not None else requests.Session()
