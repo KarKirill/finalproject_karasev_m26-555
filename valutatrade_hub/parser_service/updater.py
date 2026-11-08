@@ -121,6 +121,7 @@ class RatesUpdater:
 
     def _fetch_and_store_rates(
         self,
+        selected_source: str | None = None,
     ) -> tuple[dict[str, Any], int, dict[str, str]]:
         """Получить курсы от API и сохранить их в хранилище."""
         updated_at = (
@@ -133,6 +134,11 @@ class RatesUpdater:
             ("CoinGecko", self.crypto_client),
             ("ExchangeRate-API", self.fiat_client),
         )
+
+        if selected_source == "coingecko":
+            clients = clients[:1]
+        elif selected_source == "exchangerate":
+            clients = clients[1:]
 
         updated_count = 0
         failures = {}
@@ -177,9 +183,20 @@ class RatesUpdater:
 
         return snapshot, updated_count, failures
 
-    def run_update(self) -> dict[str, Any]:
-        """Обновить курсы и вернуть информацию о результате."""
-        snapshot, updated_count, failures = self._fetch_and_store_rates()
+    def run_update(self, source: str | None = None) -> dict[str, Any]:
+        """Обновить курсы выбранного источника или всех источников."""
+        if source not in (None, "coingecko", "exchangerate"):
+            raise ValueError(
+                "Неизвестный источник курсов. "
+                "Допустимые значения: coingecko, exchangerate."
+            )
+
+        logger.info(
+            "Запуск обновления курсов. Источник: %s",
+            source or "все",
+        )
+
+        snapshot, updated_count, failures = self._fetch_and_store_rates(source)
 
         if updated_count == 0:
             details = "; ".join(

@@ -148,13 +148,13 @@ def _handle_get_rate(from_code: str, to_code: str) -> None:
     print(f"1 {from_code} = {rate:.8f} {to_code}")
 
 
-def _handle_update_rates() -> None:
-    """Принудительно обновить курсы валют и показать результат."""
+def _handle_update_rates(source: str | None = None) -> None:
+    """Обновить курсы выбранного источника или всех источников."""
     updater = RatesUpdater()
 
     # Временно показываем сообщения Parser Service в консоли.
     with parser_console_logging():
-        result = updater.run_update()
+        result = updater.run_update(source=source)
 
     print("\nОбновление курсов завершено.")
     print(f"Обновлено валютных пар: {result['updated_count']}")
@@ -317,7 +317,7 @@ def run() -> None:
                 )
 
             elif args.command == "update-rates":
-                _handle_update_rates()
+                _handle_update_rates(args.source)
 
             elif args.command == "show-rates":
                 _handle_show_rates(args.top)

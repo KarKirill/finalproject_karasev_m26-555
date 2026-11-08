@@ -193,9 +193,16 @@ def build_parser() -> CommandParser:
     )
 
     # Обновление курсов.
-    subparsers.add_parser(
+    update_parser = subparsers.add_parser(
         "update-rates",
         help="Принудительно обновить курсы валют.",
+    )
+
+    update_parser.add_argument(
+        "--source",
+        choices=("coingecko", "exchangerate"),
+        default=None,
+        help="Источник курсов (по умолчанию — оба источника).",
     )
 
     # Просмотр сохранённых курсов.
