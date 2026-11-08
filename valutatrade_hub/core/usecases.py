@@ -342,6 +342,10 @@ def sell(user_id: int, currency_code: str, amount: float) -> dict:
     currency = get_currency(currency_code)
     _validate_amount(amount)
 
+    # Получаем актуальный курс до изменения баланса.
+    rate_usd = get_rate(currency.code, "USD")
+    total_usd = float(amount) * rate_usd
+
     database = DatabaseManager()
 
     def update_portfolio(portfolios: list) -> list:
@@ -384,6 +388,8 @@ def sell(user_id: int, currency_code: str, amount: float) -> dict:
         "currency_code": currency.code,
         "amount": float(amount),
         "balance": wallet.balance,
+        "rate_usd": rate_usd,
+        "total_usd": total_usd,
     }
 
 
