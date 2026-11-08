@@ -19,7 +19,7 @@ from valutatrade_hub.core.usecases import (
     show_portfolio,
 )
 from valutatrade_hub.infra.database import DatabaseError
-from valutatrade_hub.infra.logging_config import parser_console_logging
+from valutatrade_hub.logging_config import parser_console_logging
 from valutatrade_hub.parser_service.config import (
     BASE_CURRENCY,
     SUPPORTED_CRYPTO_CURRENCIES,
