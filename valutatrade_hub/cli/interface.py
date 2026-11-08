@@ -17,6 +17,12 @@ from valutatrade_hub.core.usecases import (
     show_portfolio,
 )
 from valutatrade_hub.infra.database import DatabaseError
+from valutatrade_hub.parser_service.config import (
+    BASE_CURRENCY,
+    SUPPORTED_CRYPTO_CURRENCIES,
+    SUPPORTED_FIAT_CURRENCIES,
+)
+from valutatrade_hub.parser_service.storage import RatesStorage
 from valutatrade_hub.parser_service.updater import RatesUpdater
 
 
@@ -143,6 +149,73 @@ def _handle_update_rates() -> None:
         print("Все источники обработаны успешно.")
 
 
+def _handle_show_rates(top: int) -> None:
+    """Показать сохранённые курсы и рейтинг криптовалют."""
+    snapshot = RatesStorage().load_rates()
+    pairs = snapshot["pairs"]
+
+    if not pairs:
+        print("Курсы пока не загружены. Выполните update-rates.")
+        return
+
+    def make_table(codes: list[str]) -> PrettyTable:
+        """Сформировать таблицу для выбранных валют."""
+        table = PrettyTable()
+        table.field_names = [
+            "Валюта",
+            f"Курс к {BASE_CURRENCY}",
+            "Источник",
+            "Обновлено (UTC)",
+        ]
+
+        for code in codes:
+            pair = f"{code}_{BASE_CURRENCY}"
+            record = pairs[pair]
+
+            table.add_row(
+                [
+                    code,
+                    f"{record['rate']:.8f}",
+                    record.get("source", "Неизвестен"),
+                    record.get("updated_at", "Нет данных"),
+                ]
+            )
+
+        return table
+
+    fiat_codes = sorted(
+        code
+        for code in SUPPORTED_FIAT_CURRENCIES
+        if code != BASE_CURRENCY and f"{code}_{BASE_CURRENCY}" in pairs
+    )
+
+    crypto_codes = sorted(
+        (
+            code
+            for code in SUPPORTED_CRYPTO_CURRENCIES
+            if f"{code}_{BASE_CURRENCY}" in pairs
+        ),
+        key=lambda code: pairs[f"{code}_{BASE_CURRENCY}"]["rate"],
+        reverse=True,
+    )[:top]
+
+    print("\nСохранённые курсы валют:")
+
+    if fiat_codes:
+        print("\nФиатные валюты:")
+        print(make_table(fiat_codes))
+    else:
+        print("Курсы фиатных валют отсутствуют.")
+
+    if crypto_codes:
+        print(f"\nТоп-{top} криптовалют по стоимости:")
+        print(make_table(crypto_codes))
+    else:
+        print("Курсы криптовалют отсутствуют.")
+
+    print(f"\nПоследнее обновление: {snapshot.get('last_refresh')}")
+
+
 def run() -> None:
     """Запустить интерактивную консоль приложения."""
     parser = build_parser()
@@ -223,6 +296,9 @@ def run() -> None:
 
             elif args.command == "update-rates":
                 _handle_update_rates()
+
+            elif args.command == "show-rates":
+                _handle_show_rates(args.top)
 
             else:
                 print(f"Команда '{args.command}' будет подключена на следующем этапе.")
