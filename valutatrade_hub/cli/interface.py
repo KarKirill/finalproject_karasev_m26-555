@@ -8,7 +8,14 @@ from prettytable import PrettyTable
 from valutatrade_hub.cli.commands import build_parser
 from valutatrade_hub.core.exceptions import ValutaTradeError
 from valutatrade_hub.core.models import User
-from valutatrade_hub.core.usecases import get_rate, login, register, show_portfolio
+from valutatrade_hub.core.usecases import (
+    buy,
+    get_rate,
+    login,
+    register,
+    sell,
+    show_portfolio,
+)
 from valutatrade_hub.infra.database import DatabaseError
 
 
@@ -85,6 +92,28 @@ def _handle_show_portfolio(
     print(f"Общая стоимость: {total_value:.2f} {base_currency}")
 
 
+def _handle_buy(user_id: int, currency_code: str, amount: float) -> None:
+    """Выполнить покупку валюты и показать результат."""
+    result = buy(user_id, currency_code, amount)
+
+    print(f"\nПокупка {result['currency_code']} выполнена успешно.")
+    print(f"Количество: {result['amount']:.8f}")
+    print(f"Курс: {result['rate_usd']:.8f} USD")
+    print(f"Стоимость покупки: {result['total_usd']:.2f} USD")
+    print(f"Текущий баланс: {result['balance']:.8f} {result['currency_code']}")
+
+
+def _handle_sell(user_id: int, currency_code: str, amount: float) -> None:
+    """Выполнить продажу валюты и показать результат."""
+    result = sell(user_id, currency_code, amount)
+
+    print(f"\nПродажа {result['currency_code']} выполнена успешно.")
+    print(f"Количество: {result['amount']:.8f}")
+    print(f"Курс: {result['rate_usd']:.8f} USD")
+    print(f"Стоимость продажи: {result['total_usd']:.2f} USD")
+    print(f"Текущий баланс: {result['balance']:.8f} {result['currency_code']}")
+
+
 def run() -> None:
     """Запустить интерактивную консоль приложения."""
     parser = build_parser()
@@ -141,6 +170,20 @@ def run() -> None:
                 _handle_show_portfolio(
                     current_user.user_id,
                     args.base,
+                )
+
+            elif args.command == "buy":
+                _handle_buy(
+                    current_user.user_id,
+                    args.currency,
+                    args.amount,
+                )
+
+            elif args.command == "sell":
+                _handle_sell(
+                    current_user.user_id,
+                    args.currency,
+                    args.amount,
                 )
 
             else:
