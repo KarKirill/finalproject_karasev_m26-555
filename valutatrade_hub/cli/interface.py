@@ -1,6 +1,7 @@
 """Интерактивный консольный интерфейс ValutaTrade Hub."""
 
 import logging
+import math
 import shlex
 from getpass import getpass
 
@@ -171,57 +172,105 @@ def _handle_update_rates(source: str | None = None) -> None:
         print("Все источники обработаны успешно.")
 
 
-def _handle_show_rates(top: int) -> None:
-    """Показать сохранённые курсы и рейтинг криптовалют."""
+def _handle_show_rates(
+    top: int | None,
+    currency_code: str | None = None,
+    base_currency: str = BASE_CURRENCY,
+) -> None:
+    """Показать сохранённые курсы с фильтрацией и конвертацией."""
+    if currency_code is not None and top is not None:
+        raise ValueError(
+            "Параметры --currency и --top нельзя использовать одновременно."
+        )
+
     snapshot = RatesStorage().load_rates()
     pairs = snapshot["pairs"]
 
     if not pairs:
-        print("Курсы пока не загружены. Выполните update-rates.")
+        print("Локальный кеш курсов пуст. Выполните update-rates.")
         return
 
+    def get_cached_usd_rate(code: str) -> float:
+        """Получить курс валюты к USD исключительно из локального кеша."""
+        if code == BASE_CURRENCY:
+            return 1.0
+
+        record = pairs.get(f"{code}_{BASE_CURRENCY}")
+
+        if not isinstance(record, dict):
+            raise ValueError(f"Курс для '{code}' не найден в кеше.")
+
+        rate = record.get("rate")
+
+        if (
+            isinstance(rate, bool)
+            or not isinstance(rate, (int, float))
+            or not math.isfinite(rate)
+            or rate <= 0
+        ):
+            raise ValueError(f"Некорректный курс для '{code}' в кеше.")
+
+        return float(rate)
+
+    # Проверяем, что курс выбранной базовой валюты имеется в кеше.
+    base_usd_rate = get_cached_usd_rate(base_currency)
+
     def make_table(codes: list[str]) -> PrettyTable:
-        """Сформировать таблицу для выбранных валют."""
+        """Сформировать таблицу с курсами в выбранной базе."""
         table = PrettyTable()
         table.field_names = [
             "Валюта",
-            f"Курс к {BASE_CURRENCY}",
+            f"Курс к {base_currency}",
             "Источник",
             "Обновлено (UTC)",
         ]
 
         for code in codes:
-            pair = f"{code}_{BASE_CURRENCY}"
-            record = pairs[pair]
+            usd_rate = get_cached_usd_rate(code)
+            converted_rate = usd_rate / base_usd_rate
+
+            record = pairs.get(f"{code}_{BASE_CURRENCY}", {})
 
             table.add_row(
                 [
                     code,
-                    f"{record['rate']:.8f}",
-                    record.get("source", "Неизвестен"),
+                    f"{converted_rate:.8f}",
+                    record.get("source", "Расчётный курс"),
                     record.get("updated_at", "Нет данных"),
                 ]
             )
 
         return table
 
+    print(f"\nСохранённые курсы относительно {base_currency}:")
+
+    # Фильтрация по одной конкретной валюте.
+    if currency_code is not None:
+        print(make_table([currency_code]))
+        print(f"\nПоследнее обновление: {snapshot.get('last_refresh')}")
+        return
+
+    # Фиатные валюты показываем по алфавиту.
     fiat_codes = sorted(
         code
         for code in SUPPORTED_FIAT_CURRENCIES
         if code != BASE_CURRENCY and f"{code}_{BASE_CURRENCY}" in pairs
     )
 
+    # Криптовалюты сортируем по стоимости относительно USD.
     crypto_codes = sorted(
         (
             code
             for code in SUPPORTED_CRYPTO_CURRENCIES
             if f"{code}_{BASE_CURRENCY}" in pairs
         ),
-        key=lambda code: pairs[f"{code}_{BASE_CURRENCY}"]["rate"],
+        key=get_cached_usd_rate,
         reverse=True,
-    )[:top]
+    )
 
-    print("\nСохранённые курсы валют:")
+    # Ограничение количества криптовалют применяется только при --top.
+    if top is not None:
+        crypto_codes = crypto_codes[:top]
 
     if fiat_codes:
         print("\nФиатные валюты:")
@@ -230,7 +279,11 @@ def _handle_show_rates(top: int) -> None:
         print("Курсы фиатных валют отсутствуют.")
 
     if crypto_codes:
-        print(f"\nТоп-{top} криптовалют по стоимости:")
+        if top is None:
+            print("\nКриптовалюты:")
+        else:
+            print(f"\nТоп-{top} криптовалют по стоимости:")
+
         print(make_table(crypto_codes))
     else:
         print("Курсы криптовалют отсутствуют.")
@@ -320,7 +373,11 @@ def run() -> None:
                 _handle_update_rates(args.source)
 
             elif args.command == "show-rates":
-                _handle_show_rates(args.top)
+                _handle_show_rates(
+                    args.top,
+                    args.currency,
+                    args.base,
+                )
 
             else:
                 print(f"Команда '{args.command}' будет подключена на следующем этапе.")

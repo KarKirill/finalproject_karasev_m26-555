@@ -210,11 +210,26 @@ def build_parser() -> CommandParser:
         "show-rates",
         help="Показать сохранённые валютные курсы.",
     )
+
+    rates_parser.add_argument(
+        "--currency",
+        type=_currency_code,
+        default=None,
+        help="Показать курс только указанной валюты.",
+    )
+
+    rates_parser.add_argument(
+        "--base",
+        type=_currency_code,
+        default="USD",
+        help="Базовая валюта для отображения курсов.",
+    )
+
     rates_parser.add_argument(
         "--top",
         type=_positive_integer,
-        default=5,
-        help="Количество криптовалют в рейтинге.",
+        default=None,
+        help="Показать N самых дорогих криптовалют.",
     )
 
     # Служебные команды.
