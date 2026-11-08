@@ -17,6 +17,7 @@ from valutatrade_hub.core.usecases import (
     show_portfolio,
 )
 from valutatrade_hub.infra.database import DatabaseError
+from valutatrade_hub.parser_service.updater import RatesUpdater
 
 
 def _handle_register(username: str) -> None:
@@ -122,6 +123,26 @@ def _handle_get_rate(from_code: str, to_code: str) -> None:
     print(f"1 {from_code} = {rate:.8f} {to_code}")
 
 
+def _handle_update_rates() -> None:
+    """Принудительно обновить курсы валют и показать результат."""
+    updater = RatesUpdater()
+    result = updater.run_update()
+
+    print("\nОбновление курсов завершено.")
+    print(f"Обновлено валютных пар: {result['updated_count']}")
+    print(f"Время обновления: {result['last_refresh']}")
+
+    errors = result["errors"]
+
+    if errors:
+        print("\nНекоторые источники завершились с ошибками:")
+
+        for source, reason in errors.items():
+            print(f"  {source}: {reason}")
+    else:
+        print("Все источники обработаны успешно.")
+
+
 def run() -> None:
     """Запустить интерактивную консоль приложения."""
     parser = build_parser()
@@ -199,6 +220,9 @@ def run() -> None:
                     args.from_code,
                     args.to_code,
                 )
+
+            elif args.command == "update-rates":
+                _handle_update_rates()
 
             else:
                 print(f"Команда '{args.command}' будет подключена на следующем этапе.")
